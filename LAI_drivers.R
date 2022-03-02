@@ -19,8 +19,8 @@ library(car)
 
 
 #### load data ######## 
-  setwd("D:/OneDrive - FURB/Doutorado/Estudos/Forçantes ambientais")
-  wdname<-"D:/OneDrive - FURB/Doutorado/Estudos/Forçantes ambientais"
+  setwd("folder")
+  wdname<-"folder"
   df<-read.csv("data.csv",sep=";")
 
 df[,c(12,14:16)]<-list(NULL) #dropping cons_ind, LanPro3,EucNeaDis3 and NumOfPat3 - unused variables 
