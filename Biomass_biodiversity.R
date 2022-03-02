@@ -22,18 +22,19 @@ library(gridExtra)
 
 
 #### Data ####
-setwd("C:/Users/danie/OneDrive - FURB/Doutorado/Estudos/Biomass/dados")
-wdname<-"C:/Users/danie/OneDrive - FURB/Doutorado/Estudos/Biomass/dados"
+setwd("folder path")
+wdname<-"folder path"
 df<-read.csv("ua_data_rf.csv",sep=";", fileEncoding="UTF-8-BOM")
 names(df)
 dfs <- df[-100, ] #take out primary forest plot from dataset
+dfs$dist_edgel<-log1p(df$dist_edge) #log transform distance to edge
 
 symbols(x = df$long, y = df$lat, circles = df$agb_t, inches = 0.1)
 ggcorr(df[,c(8:16)], label=TRUE) #visualize correlation between variables
 
 
 #### Model selection AGB STOCK ####
-global_agb<-lm(agb_t~lai+r*dist_edge+rc*dist_edge,data=df,na.action = "na.fail")
+global_agb<-lm(agb_t~lai+r*dist_edgel+rc*dist_edgel,data=dfs,na.action = "na.fail")
 sel_agb<-dredge(global_agb,beta="partial.sd", evaluate=TRUE,fixed = NULL, 
                 rank="AICc",subset=TRUE,trace=2)
 # The global, or base model, is the best model according to the dredge function
@@ -63,7 +64,7 @@ summary(rat.sp) # Rational quadratic variogram
 #Based on AIC, the spherical variogram is the best one for AGB
 
 
-fit1<-lm(agb_t~lai+r*dist_edge+rc*dist_edge,data=dfs) #base model
+fit1<-lm(agb_t~lai+r*dist_edgel+rc*dist_edgel,data=dfs) #base model
 summary(fit1)
 plot(fit1)
   cres = spline.correlog(x = df$long, y = df$lat, z = resid(fit1), resamp = 0)
@@ -83,7 +84,7 @@ summary(fit3)
 #w/o the spatial correlation term
 
 #### Model selection AGB CHANGE ####
-global_gpp<-lm(gpp_5_yr~lai+dist_edge*rp+dist_edge*r,data=df,na.action = "na.fail")
+global_gpp<-lm(gpp_5_yr~lai+dist_edgel*rp+dist_edgel*r,data=dfs,na.action = "na.fail")
 sel_gpp<-dredge(global_gpp,beta="partial.sd", evaluate=TRUE,fixed = NULL, 
                 rank="AICc",subset=TRUE,trace=2)
 # The best model according to the dredge function is the one including only distance to edge and richenss of pionneer species
@@ -107,7 +108,7 @@ rat.sp<-update(null.model, correlation = corRatio(1, form = ~ long + lat), metho
 summary(rat.sp) # Rational quadratic variogram
 
 
-fit10<-lm(gpp_5_yr~rp+dist_edge,data=dfs) #base model
+fit10<-lm(gpp_5_yr~rp+dist_edgel,data=dfs) #base model
 summary(fit10)
 plot(fit10)
 cres = spline.correlog(x = df$long, y = df$lat, z = resid(fit10), resamp = 0)
@@ -434,20 +435,20 @@ estimates1<-dwplot(fit1df, show_intercept = TRUE,
   annotate(geom='text',x=5,y=2.3,size=3, label=paste('0.004 (0.002)*'))+
   annotate(geom='text',x=5,y=1.3,size=3, label=paste('-0.009 (0.004)*'))
 
-pred_agb <- predict(fit1, newdata = df) #predict agb with fit1 model
-df$pred_agb<-pred_agb #add prediction to df
+pred_agb <- predict(fit1, newdata = dfs) #predict agb with fit1 model
+dfs$pred_agb<-pred_agb #add prediction to df
 
 
-plot_fit1<-ggplot(data=df, aes(x=agb_t, y=pred_agb))+
+plot_fit1<-ggplot(data=dfs, aes(x=agb_t, y=pred_agb))+
   geom_abline(intercept = 0)+xlim(1,415)+ylim(1,415)+
   geom_smooth(method='lm',color = 'blue',size=0.1,se=T)+
   geom_point(aes(x=agb_t, y=pred_agb),shape=22,fill='#165e82',color='black',
              alpha = 0.6,stroke = 1.5,size = 3.0)+
-  geom_point(data=df[100,],aes(x=agb_t, y=pred_agb),shape=22,fill='red',color='black',
-             alpha = 0.6,stroke = 1.5,size = 3.0)+
+  #geom_point(data=df[100,],aes(x=agb_t, y=pred_agb),shape=22,fill='red',color='black',
+             #alpha = 0.6,stroke = 1.5,size = 3.0)+
   xlab(bquote("BAS medido"~(Mg.ha^-1))) + 
   ylab(bquote("BAS predito"~(Mg.ha^-1)))+
-  annotate(geom='text',x=300,y=10,size=5,label=paste('R2 = 0.37;   p < 0.05'))
+  annotate(geom='text',x=300,y=10,size=5,label=paste('R2 = 0.36;   p < 0.05'))
 
 grid1<-plot_grid(plot_fit1,estimates1, nrow=1,ncol=2)
 
@@ -472,23 +473,23 @@ estimates<-dwplot(fit10df,show_intercept = TRUE,
   annotate(geom='text',x=0.25,y=1.2,size=3.5, label=paste('-2.40 (4.33)ns'))
   
   
-pred_gpp <- predict(fit10, newdata = df) #predict agb with fit1 model
-df$pred_gpp<-pred_gpp #dd prediction to df
+pred_gpp <- predict(fit10, newdata = dfs) #predict agb with fit1 model
+dfs$pred_gpp<-pred_gpp #dd prediction to df
 
-plot_fit10<-ggplot(data=df, aes(x=gpp_5_yr, y=pred_gpp))+
+plot_fit10<-ggplot(data=dfs, aes(x=gpp_5_yr, y=pred_gpp))+
   geom_abline(intercept = 0)+xlim(-38,50)+ylim(-38,50)+
   geom_smooth(method='lm',color = 'blue',size=0.1,se=T)+
   geom_point(aes(x=gpp_5_yr, y=pred_gpp),shape=22,fill='#165e82',color='black',
              alpha = 0.5,stroke = 1.5,size = 3)+
-  geom_point(data=df[100,],aes(x=gpp_5_yr, y=pred_gpp),shape=22,fill='red',color='black',
-             alpha = 0.6,stroke = 1.5,size = 3.0)+
+  #geom_point(data=df[100,],aes(x=gpp_5_yr, y=pred_gpp),shape=22,fill='red',color='black',
+  #          alpha = 0.6,stroke = 1.5,size = 3.0)+
   xlab(bquote('Mudança no BAS medida'~(Mg.ha.5anos^-1))) + 
   ylab(bquote('Mudança no BAS predita'~(Mg.ha.5anos^-1)))+
   #annotate(geom='text',x=19,y=40,label=paste('AGBc = -2.84 + rp x 0.641 + de x 0.016'))+
-  annotate(geom='text',x=10,y=40,size=5,label=paste('R2 = 0.07;   p < 0.05'))
+  annotate(geom='text',x=10,y=40,size=5,label=paste('R2 = 0.14;   p < 0.05'))
 
   
-# grid2<-plot_grid(plot_fit10,estimates, nrow=1,ncol=2)
+grid2<-plot_grid(plot_fit10,estimates, nrow=1,ncol=2)
 # ggsave(filename = "agbc.tiff", 
 #        plot = grid2, 
 #        device = "tiff", 
