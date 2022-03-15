@@ -22,16 +22,41 @@ library(gridExtra)
 
 
 #### Data ####
-setwd("folder path")
-wdname<-"folder path"
-df<-read.csv("ua_data_rf.csv",sep=";", fileEncoding="UTF-8-BOM")
+setwd("folder")
+wdname<-"folder"
+df<-read.csv("data.csv",sep=";", fileEncoding="UTF-8-BOM")
 names(df)
 dfs <- df[-100, ] #take out primary forest plot from dataset
-dfs$dist_edgel<-log1p(df$dist_edge) #log transform distance to edge
+dfs$dist_edgel<-log1p(dfs$dist_edge) #log transform distance to edge
 
 symbols(x = df$long, y = df$lat, circles = df$agb_t, inches = 0.1)
-ggcorr(df[,c(8:16)], label=TRUE) #visualize correlation between variables
+ggcorr(dfs[,c(8:23)], label=TRUE) #visualize correlation between variables
 
+
+#### linear relationships ####
+ggplot(dfs, aes(dist_edge,agb_t)) + 
+  geom_point() + 
+  geom_smooth()#method=lm
+ggplot(dfs, aes(dist_edgel,agb_t)) + 
+  geom_point() + 
+  geom_smooth()
+
+summary(lm(agb_t~dist_edgel,data=dfs))
+plot(lm(agb_t~dist_edgel,data=dfs))
+summary(lm(agb_t~dist_edge,data=dfs))
+plot(lm(agb_t~dist_edge,data=dfs))
+
+ggplot(dfs, aes(dist_edge,gpp_5_yr)) + 
+  geom_point() + 
+  geom_smooth()#method=lm
+ggplot(dfs, aes(dist_edgel,gpp_5_yr)) + 
+  geom_point() + 
+  geom_smooth()#method=lm
+
+summary(lm(gpp_5_yr~dist_edge,data=dfs))
+plot(lm(gpp_5_yr~dist_edge,data=dfs))
+summary(lm(gpp_5_yr~dist_edgel,data=dfs))
+plot(lm(gpp_5_yr~dist_edgel,data=dfs))
 
 #### Model selection AGB STOCK ####
 global_agb<-lm(agb_t~lai+r*dist_edgel+rc*dist_edgel,data=dfs,na.action = "na.fail")
@@ -47,9 +72,9 @@ sel_agb<-dredge(global_agb,beta="partial.sd", evaluate=TRUE,fixed = NULL,
 #### spatial correlation AGB STOCK ####
 
 #find the best variogram
-df$grp<-rep(1,dim(df)[1]) #creates a colum with #1
+dfs$grp<-rep(1,dim(dfs)[1]) #creates a colum with #1
 
-null.model<-lme(agb_t~1,data=df,random=~1|grp) #creates a null model
+null.model<-lme(agb_t~1,data=dfs,random=~1|grp) #creates a null model
 summary(null.model)
 exp.sp<-update(null.model, correlation = corExp(1, form = ~ long + lat), method = "ML")
 summary(exp.sp) # exponential variogram
@@ -71,12 +96,12 @@ plot(fit1)
   plot(cres) #visualize spatial autocorrelation
   
 
-fit2<-lme(agb_t~lai+rc*dist_edge+r*dist_edge,data=df,random=~1|grp,
+fit2<-lme(agb_t~lai+rc*dist_edgel+r*dist_edgel,data=dfs,random=~1|grp,
           corr=corSpatial(form=~long+lat,type='s',nugget=F),method='ML')
 summary(fit2) #model with spatial correlation term
 plot_model(fit2)
 
-fit3<-lme(agb_t~lai+rc*dist_edge+r*dist_edge,data=df,random=~1|grp,method='ML') #model w/o spatial correlation term
+fit3<-lme(agb_t~lai+rc*dist_edgel+r*dist_edgel,data=dfs,random=~1|grp,method='ML') #model w/o spatial correlation term
 anova(fit2,fit3) #compare the two models (w and w/o spatial correlation terms)
 summary(fit3)
 
@@ -94,7 +119,7 @@ sel_gpp<-dredge(global_gpp,beta="partial.sd", evaluate=TRUE,fixed = NULL,
 #summary(avg_gpp)
 
 ##### spatial correlation AGB CHANGE ####
-null.model<-lme(gpp_5_yr~1,data=df,random=~1|grp) #creates a null model
+null.model<-lme(gpp_5_yr~1,data=dfs,random=~1|grp) #creates a null model
 summary(null.model)
 exp.sp<-update(null.model, correlation = corExp(1, form = ~ long + lat), method = "ML")
 summary(exp.sp) # exponential variogram
@@ -114,11 +139,11 @@ plot(fit10)
 cres = spline.correlog(x = df$long, y = df$lat, z = resid(fit10), resamp = 0)
 plot(cres) #visualize spatial autocorrelation
 
-fit20<-lme(gpp_5_yr~rp+dist_edge,data=df,random=~1|grp,
+fit20<-lme(gpp_5_yr~rp+dist_edgel,data=dfs,random=~1|grp,
           corr=corSpatial(form=~long+lat,type='s',nugget=F),method='ML')
 summary(fit20) #model with spatial correlation term
 
-fit30<-lme(gpp_5_yr~rp+dist_edge,data=df,random=~1|grp,method='ML') #model w/o spatial correlation term
+fit30<-lme(gpp_5_yr~rp+dist_edgel,data=dfs,random=~1|grp,method='ML') #model w/o spatial correlation term
 anova(fit20,fit30) #compare the two models (w and w/o spatial correlation terms
 summary(fit30)
 
@@ -263,6 +288,7 @@ na.exclude(dfm2)
 fm1 <- aov(value~variable, data=dfm)
 anova(fm1)
 posthoc <- TukeyHSD(fm1)
+plot(fm1)
 
 #homogenety of variance
 df2<-melt(dfs,id.vars ='ua',measure.vars =c('agb_p','agb_s'))
@@ -271,22 +297,31 @@ var.test(value~variable,data=df2)
 df3<-melt(dfs,id.vars ='ua',measure.vars =c('agb_c','agb_s'))
 var.test(value~variable,data=df3)
 
-bartlett.test(value~variable,data=dfm)
+bartlett.test(value~variable,data=dfm) #the variance between ecological groups is not homogeneous 
+
+
+fm1 <- oneway.test(value~variable, data=dfm, var.equal = FALSE) #one-way ANOVA with welch correction
+
+library(userfriendlyscience)
+posthocTGH(dfm$value,dfm$variable, method="games-howell",
+           conf.level = 0.95, digits=2, p.adjust="none",
+           formatPvalue = TRUE) #post-hoc test Games_Howell for groups with differing variations
+
 
 ###### Dashboard with main results 
 ge<-dfm$variable
-ge<-revalue(ge,c('agb_p'='Pioneiras','agb_s'='Secondarias','agb_c'='Climácicas','agb_nc'='Não Classificadas'))
+ge<-revalue(ge,c('agb_p'='Pioneiras','agb_s'='Secundarias','agb_c'='Climácicas','agb_nc'='Não Classificadas'))
 ge_agb<-dfm$value
 
 ge2<-dfm2$variable
-ge2<-revalue(ge2,c('agb_pp'='Pioneiras','agb_sp'='Secondarias','agb_cp'='Climácicas','agb_ncp'='Não Classificadas'))
+ge2<-revalue(ge2,c('agb_pp'='Pioneiras','agb_sp'='Secundarias','agb_cp'='Climácicas','agb_ncp'='Não Classificadas'))
 ge_agb2<-dfm2$value
 
 
 prim <- df[100, ]
 prim <- melt(prim,id.vars ='ua',measure.vars =c('agb_p','agb_s','agb_c','agb_nc'))
 gem<-prim$variable
-gem<-revalue(gem,c('agb_p'='Pioneiras','agb_s'='Secondarias','agb_c'='Climácicas','agb_nc'='Não Classificadas'))
+gem<-revalue(gem,c('agb_p'='Pioneiras','agb_s'='Secundarias','agb_c'='Climácicas','agb_nc'='Não Classificadas'))
 ge_agbm<-prim$value
 
 
@@ -312,57 +347,57 @@ box_agb<-ggplot(data=dfm, aes(ge_agb),na.omit(dfm),show.legend=F)+
 
 
 #agb ecological group facet
-agbc<-ggplot(dfs,aes(x=ua,y=agb_cp,fill=dist_edge))+geom_bar(stat="identity")+
-  scale_fill_gradient(
-    low = "#9fcbe2",
-    high = "#002742",
-    space = "Lab",
-    na.value = "grey50",
-    guide = "colourbar",
-    aesthetics = "fill"
-  )+labs(x='',y='',title='Climácicas')+ylim(0,100)+
+agbc<-ggplot(dfs,aes(x=ua,y=agb_cp))+geom_bar(stat="identity", fill="#165e82")+ #,fill=dist_edge
+  # scale_fill_gradient(
+  #   low = "#9fcbe2",
+  #   high = "#002742",
+  #   space = "Lab",
+  #   na.value = "grey50",
+  #   guide = "colourbar",
+  #   aesthetics = "fill")+
+  labs(x='',y='',title='Climácicas')+ylim(0,100)+
   geom_hline(yintercept = 50, colour = "grey60", linetype = 2)+
   guides(fill=guide_coloursteps (title="Distância para borda (m)"))+
   theme(legend.position="none",axis.text.x=element_blank(),
         plot.title = element_text(size=10,hjust=0.5,vjust=0))
 
-agbs<-ggplot(dfs,aes(x=ua,y=agb_sp,fill=dist_edge))+geom_bar(stat="identity")+
-  scale_fill_gradient(
-    low = "#9fcbe2",
-    high = "#002742",
-    space = "Lab",
-    na.value = "grey50",
-    guide = "colourbar",
-    aesthetics = "fill"
-  )+labs(x='',y='',title='Secondarias')+ylim(0,100)+
+agbs<-ggplot(dfs,aes(x=ua,y=agb_sp))+geom_bar(stat="identity", fill="#165e82")+ #,fill=dist_edge
+  # scale_fill_gradient(
+  #   low = "#9fcbe2",
+  #   high = "#002742",
+  #   space = "Lab",
+  #   na.value = "grey50",
+  #   guide = "colourbar",
+  #   aesthetics = "fill" )+
+  labs(x='',y='',title='Secundarias')+ylim(0,100)+
   geom_hline(yintercept = 50, colour = "grey60", linetype = 2)+
   guides(fill=guide_coloursteps (title="Distância para borda (m)"))+
   theme(legend.position="none",axis.text.x=element_blank(),
         plot.title = element_text(size=10,hjust=0.5,vjust=0))
 
-agbp<-ggplot(dfs,aes(x=ua,y=agb_pp,fill=dist_edge))+geom_bar(stat="identity")+
-  scale_fill_gradient(
-    low = "#9fcbe2",
-    high = "#002742",
-    space = "Lab",
-    na.value = "grey50",
-    guide = "colourbar",
-    aesthetics = "fill"
-  )+labs(x='',y='',title='Pioneiras')+ylim(0,100)+
+agbp<-ggplot(dfs,aes(x=ua,y=agb_pp))+geom_bar(stat="identity", fill="#165e82")+ #,fill=dist_edge
+  # scale_fill_gradient(
+  #   low = "#9fcbe2",
+  #   high = "#002742",
+  #   space = "Lab",
+  #   na.value = "grey50",
+  #   guide = "colourbar",
+  #   aesthetics = "fill")+
+  labs(x='',y='',title='Pioneiras')+ylim(0,100)+
   geom_hline(yintercept = 50, colour = "grey60", linetype = 2)+
   guides(fill=guide_coloursteps (title="Distância para borda (m)"))+
   theme(legend.position="none",axis.text.x=element_blank(),
         plot.title = element_text(size=10,hjust=0.5,vjust=0))
 
-agbnc<-ggplot(dfs,aes(x=ua,y=agb_ncp,fill=dist_edge))+geom_bar(stat="identity")+
-  scale_fill_gradient(
-    low = "#9fcbe2",
-    high = "#002742",
-    space = "Lab",
-    na.value = "grey50",
-    guide = "colourbar",
-    aesthetics = "fill"
-  )+labs(x='',y='',title='Não Classificadas')+ylim(0,100)+
+agbnc<-ggplot(dfs,aes(x=ua,y=agb_ncp))+geom_bar(stat="identity", fill="#165e82")+ #,fill=dist_edge
+  # scale_fill_gradient(
+  #   low = "#9fcbe2",
+  #   high = "#002742",
+  #   space = "Lab",
+  #   na.value = "grey50",
+  #   guide = "colourbar",
+  #   aesthetics = "fill")+
+  labs(x='',y='',title='Não Classificadas')+ylim(0,100)+
   geom_hline(yintercept = 50, colour = "grey60", linetype = 2)+
   guides(fill=guide_coloursteps,(title="Distância para borda (m)"))+
   theme(legend.position="none",axis.text.x=element_blank(),
@@ -370,10 +405,10 @@ agbnc<-ggplot(dfs,aes(x=ua,y=agb_ncp,fill=dist_edge))+geom_bar(stat="identity")+
 
 legend <- get_legend(agbc+theme(legend.position="bottom",legend.title=element_text(size=10)))
 
-prow<- plot_grid(agbc,agbs,agbp,agbnc,legend,nrow=5,ncol=1,
-                 labels='D',rel_heights = c(2,2,2,2,.6))+
+prow<- plot_grid(agbc,agbs,agbp,agbnc,nrow=4,ncol=1, #legend, ,rel_heights = c(2,2,2,2,.6)
+                 labels='D')+
   draw_label("BAS (%)", x=  0, y=0.53, vjust= 1.5, angle=90,size=9)+
-  draw_label("Unidade Amostral", x=0.56, y=  0, vjust=-5, angle= 0,size=9)
+  draw_label("Unidade Amostral", x=0.56, y=  0, vjust=-1, angle= 0,size=10)
 
 ### histograma da mudança de AGB
 histpro <- ggplot(dfs,aes(x=gpp_5_yr))+
@@ -423,17 +458,17 @@ estimates1<-dwplot(fit1df, show_intercept = TRUE,
        vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2))%>% 
        relabel_predictors(lai = 'IAF',
                        rc = 'Riqueza de espécies climácicas',
-                       dist_edge = 'Distancia para borda',
+                       dist_edgel = 'Distancia para borda',
                        r = 'Riqueza total de espécies')+
   scale_colour_grey(start = 0.1, end = 0.1)+
-  theme(legend.position="none") + xlab("Coefficient") + ylab("")+
-  annotate(geom='text',x=5,y=7.3,size=3, label=paste('22.41 (7.18)*'))+
-  annotate(geom='text',x=5,y=6.3,size=3, label=paste('1.15 (1.02)ns'))+
-  annotate(geom='text',x=5,y=5.3,size=3, label=paste('-0.07 (0.15)ns'))+
-  annotate(geom='text',x=5,y=4.3,size=3, label=paste('0.85 (0.52)ns'))+
-  annotate(geom='text',x=5,y=3.3,size=3, label=paste('-59.02 (35.81)ns'))+
-  annotate(geom='text',x=5,y=2.3,size=3, label=paste('0.004 (0.002)*'))+
-  annotate(geom='text',x=5,y=1.3,size=3, label=paste('-0.009 (0.004)*'))
+  theme(legend.position="none") + xlab("Coeficiente") + ylab("")+
+  annotate(geom='text',x=5,y=7.3,size=3, label=paste('22,94 (7,86)*'))+
+  annotate(geom='text',x=5,y=6.3,size=3, label=paste('7,92 (3,32)*'))+
+  annotate(geom='text',x=5,y=5.3,size=3, label=paste('-2.98 (12,87)ns'))+
+  annotate(geom='text',x=5,y=4.3,size=3, label=paste('1,31 (1,22)ns'))+
+  annotate(geom='text',x=5,y=3.3,size=3, label=paste('68,72 (53,88)ns'))+
+  annotate(geom='text',x=5,y=2.3,size=3, label=paste('0,59 (0,23)*'))+
+  annotate(geom='text',x=5,y=1.3,size=3, label=paste('-1,76 (0,68)*'))
 
 pred_agb <- predict(fit1, newdata = dfs) #predict agb with fit1 model
 dfs$pred_agb<-pred_agb #add prediction to df
@@ -465,12 +500,12 @@ fit10df<-tidy(fit10)
 estimates<-dwplot(fit10df,show_intercept = TRUE,
        vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2))%>% 
   relabel_predictors(rp = 'Riqueza de espécies pioneiras',
-                     dist_edge = 'Distancia para borda')+
+                     dist_edgel = 'Distancia para borda')+
   scale_colour_grey(start = 0.1, end = 0.1)+
-  theme(legend.position="none") + xlab("Coefficient") + ylab("")+
-  annotate(geom='text',x=0.25,y=2.2,size=3.5, label=paste('0.01 (0.001)*'))+
-  annotate(geom='text',x=0.25,y=3.2,size=3.5, label=paste('0.66 (0.28)*'))+
-  annotate(geom='text',x=0.25,y=1.2,size=3.5, label=paste('-2.40 (4.33)ns'))
+  theme(legend.position="none") + xlab("Coeficiente") + ylab("")+
+  annotate(geom='text',x=0.25,y=2.2,size=3.5, label=paste('3,34 (0,88)*'))+
+  annotate(geom='text',x=0.25,y=3.2,size=3.5, label=paste('0,49 (0,28)ns'))+
+  annotate(geom='text',x=0.25,y=1.2,size=3.5, label=paste('-13,60 (5,30)*'))
   
   
 pred_gpp <- predict(fit10, newdata = dfs) #predict agb with fit1 model
@@ -503,7 +538,7 @@ grid2<-plot_grid(plot_fit10,estimates, nrow=1,ncol=2)
 
 # ploting the interaction terms of the AGB stock model
 
-fiti1<-lm(agb_t~r*dist_edge,data=df)
+fiti1<-lm(agb_t~r*dist_edgel,data=dfs)
 p1<-ggPredict(fiti1,se=T,interactive=TRUE)
 ggsave(filename = "interact1.tiff", 
        plot = p1, 
@@ -522,10 +557,13 @@ ggsave(filename = "interact1.tiff",
 #                   legend.title=element_blank(),legend.text = element_text(family="Times",colour="black", size = 10))
 
 
-fiti2<-lm(agb_t~dist_edge*rc,data=df)
+fiti2<-lm(agb_t~dist_edgel*rc,data=dfs)
 p2<-ggPredict(fiti2,se=T,interactive=TRUE)
 
 grid3<-plot_grid(p1,p2,ncol=2)
+
+
+
 
 
 
